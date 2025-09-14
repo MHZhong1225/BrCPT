@@ -7,11 +7,12 @@ from tqdm import tqdm
 import numpy as np
 import os
 import argparse
+from typing import Dict, Any, Tuple
 
 # Import from our refactored PyTorch files
-import models
-import data
-import conformal_prediction as cp
+from utils import models
+from utils import data
+from utils import conformal_prediction as cp
 from config import get_config
 
 def get_predictions(
@@ -62,7 +63,7 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
     if not os.path.exists(args.model_path):
         raise FileNotFoundError(f"Model checkpoint not found at: {args.model_path}")
     
-    model.load_state_dict(torch.load(args.model_path, map_location=device))
+    model.load_state_dict(torch.load(args.model_path, map_location=device,weights_only=True))
     model.to(device)
     print(f"Model loaded from {args.model_path}")
 
@@ -95,13 +96,13 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate a trained model with Conformal Prediction.")
-    parser.add_argument('--model_path', type=str, required=True,
+    parser.add_argument('--model_path', type=str, default='./experiments/bracs/conformal_20250914-122634/',
                         help='Path to the trained model checkpoint (.pth file).')
     parser.add_argument('--alpha', type=float, default=0.1,
                         help='The desired miscoverage level alpha (e.g., 0.1 for 90% target coverage).')
     
     args = parser.parse_args()
-    
+    args.model_path = args.model_path+'conformal_model.pth'
     config = get_config()
     
     run_evaluation(config, args)

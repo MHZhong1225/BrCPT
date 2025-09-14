@@ -51,7 +51,7 @@ def main(args: argparse.Namespace):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run training for Conformal Prediction.")
     
-    parser.add_argument('--mode', type=str, required=True, default='conformal', choices=['normal', 'conformal'],
+    parser.add_argument('--mode', type=str, default='conformal', choices=['normal', 'conformal'],
                         help="The training mode to run ('normal' for baseline, 'conformal' for our method).")
     
     # Optional arguments to override the config file

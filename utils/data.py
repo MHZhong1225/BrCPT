@@ -90,7 +90,7 @@ def get_dataloaders(
     
     # Recommended to use a number of workers for faster data loading
     # num_workers can be os.cpu_count() for maximum performance
-    num_workers = 4 
+    num_workers = 20
 
     dataloaders = {
         'train': DataLoader(
@@ -141,8 +141,8 @@ if __name__ == '__main__':
         # You should run the calculate_stats.py script first to get these values
         # For now, we use placeholder values.
         print("WARNING: Using placeholder mean and std. Please calculate the actual values from your training set.")
-        calculated_mean = (0.5, 0.5, 0.5)
-        calculated_std = (0.5, 0.5, 0.5)
+        calculated_mean = (0.712733, 0.545225, 0.685850)
+        calculated_std = (0.170330, 0.209620, 0.151623)
 
         data = get_dataloaders(
             dataset_path=path_to_bracs_latest_version,

@@ -16,8 +16,8 @@ def get_config() -> Dict[str, Any]:
         "image_size": (224, 224),
         "num_classes": 7,
         # IMPORTANT: Replace these with the actual values calculated from your training set
-        "mean": (0.78, 0.62, 0.76),
-        "std": (0.15, 0.19, 0.14),
+        "mean": (0.712733, 0.545225, 0.685850), # Placeholder
+        "std": (0.170330, 0.209620, 0.151623),  # Placeholder
         
         # --- Model Settings ---
         "model": {
@@ -29,9 +29,9 @@ def get_config() -> Dict[str, Any]:
         "training": {
             "epochs": 100,
             "batch_size": 32,
-            "learning_rate": 0.001,
+            "learning_rate": 1e-4,
             "momentum": 0.9,
-            "weight_decay": 1e-4,
+            "weight_decay": 5e-4,
         },
         
         # --- Output Settings ---
@@ -43,7 +43,7 @@ def get_config() -> Dict[str, Any]:
             "fraction": 0.5, # Split ratio for cal/pred sets in a batch (50% / 50%)
             "temperature": 0.1, # For smooth_predict_threshold
             "regularization_strength": 0.01, # For torchsort's soft_quantile
-            "size_weight": 0.5, # Weight for the size loss term
+            "size_weight": 0.3, # Weight for the size loss term
             "cross_entropy_weight": 0.1, # Optional weight for standard CE loss for stability
         }
     }

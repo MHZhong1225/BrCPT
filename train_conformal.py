@@ -54,11 +54,12 @@ def train_one_epoch_conformal(
         # 1. Forward pass to get scores
         outputs = model(inputs)
         # We use log_softmax as scores, which is often more numerically stable
-        scores = torch.log_softmax(outputs, dim=1)
-
+        # scores = torch.log_softmax(outputs, dim=1)
+        scores = torch.softmax(outputs, dim=1)
         # 2. Split the batch into calibration and prediction sets
         batch_size = inputs.shape[0]
         cal_split_size = int(batch_size * conf_config['fraction'])
+
         
         # Ensure we have data for both splits
         if cal_split_size == 0 or cal_split_size == batch_size:
@@ -72,13 +73,16 @@ def train_one_epoch_conformal(
         # Get conformity scores for the true classes
         # NOTE: The original paper may use a different definition of conformity score.
         # This implementation uses the negative log-probability of the true class.
-        cal_conformity_scores = -cal_scores[torch.arange(cal_split_size), cal_labels]
+        # cal_conformity_scores = -cal_scores[torch.arange(cal_split_size), cal_labels]
+
+        cal_conformity_scores = cal_scores[torch.arange(cal_split_size), cal_labels]
         
         # Compute the smooth (differentiable) quantile to get the threshold tau
         tau = scp.smooth_conformal_quantile(
             cal_conformity_scores, 
             alpha=conf_config['alpha'],
             # temperature=conf_config.get('regularization_strength', 0.01) # Use temperature for our implementation
+            regularization_strength=conf_config['regularization_strength']
         )
         
         # 4. Differentiable Prediction on the prediction set
@@ -89,7 +93,8 @@ def train_one_epoch_conformal(
         pred_conformity_scores = -pred_scores
         
         smooth_sets = scp.smooth_predict_threshold(
-            pred_conformity_scores, # Should be conformity scores, not raw model scores
+            # pred_conformity_scores, # Should be conformity scores, not raw model scores
+            pred_scores,
             tau, 
             temperature=conf_config['temperature']
         )
@@ -102,15 +107,26 @@ def train_one_epoch_conformal(
         # b) Size Loss
         size_loss = cputils.compute_size_loss(smooth_sets, target_size=1) # 'valid' loss
         
-        # c) Combine losses
-        # The log-transform is used for stability, as in the original paper
-        conformal_loss = torch.log(coverage_loss + conf_config['size_weight'] * size_loss + 1e-8)
+        # # c) Combine losses
+        # # The log-transform is used for stability, as in the original paper
+        # conformal_loss = torch.log(coverage_loss + conf_config['size_weight'] * size_loss + 1e-8)
         
-        # Add optional standard cross-entropy and weight decay
-        ce_loss = nn.CrossEntropyLoss()(outputs, labels) * conf_config['cross_entropy_weight']
+        # # Add optional standard cross-entropy and weight decay
+        # ce_loss = nn.CrossEntropyLoss()(outputs, labels) * conf_config['cross_entropy_weight']
+        # total_loss = conformal_loss + ce_loss
         
-        total_loss = conformal_loss + ce_loss
         
+        # --- STABILITY FIX: Use a Stable Linear Combination of Losses ---
+        # Remove the unstable log transform.
+        # Add a standard Cross-Entropy loss as a stabilizer.
+        ce_loss = nn.CrossEntropyLoss()(outputs, labels)
+        
+        total_loss = (
+            coverage_loss + 
+            conf_config['size_weight'] * size_loss +
+            conf_config['cross_entropy_weight'] * ce_loss
+        )
+
         # 6. Backward pass and optimization
         total_loss.backward()
         optimizer.step()
@@ -191,14 +207,15 @@ if __name__ == '__main__':
         'dataset_path': './BRACS_Rol/latest_version', # IMPORTANT: Update this path
         'output_dir': './experiments/conformal_test',
         'device': 'cuda',
-        'mean': (0.5, 0.5, 0.5), # Placeholder
-        'std': (0.5, 0.5, 0.5),  # Placeholder
+        'mean': (0.712733, 0.545225, 0.685850), # Placeholder
+        'std': (0.170330, 0.209620, 0.151623),  # Placeholder
+
         'model': {'pretrained': True},
         'training': {
             'batch_size': 16,
-            'learning_rate': 0.001,
+            'learning_rate': 1e-4,
             'momentum': 0.9,
-            'weight_decay': 1e-4,
+            'weight_decay': 5e-4,
             'epochs': 5,
         },
         'conformal': { # Conformal training specific hyperparameters
@@ -206,7 +223,7 @@ if __name__ == '__main__':
             'fraction': 0.5, # 50% for calibration, 50% for prediction
             'temperature': 0.1,
             'regularization_strength': 0.01,
-            'size_weight': 0.5,
+            'size_weight': 0.1,
             'cross_entropy_weight': 0.1 # Can add a small amount of CE loss for stability
         }
     }
@@ -215,3 +232,4 @@ if __name__ == '__main__':
         run_conformal_training(mock_config)
     else:
         print(f"Test path '{mock_config['dataset_path']}' does not exist. Please update the path to run the test.")
+        
