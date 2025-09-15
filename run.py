@@ -5,7 +5,9 @@ import os
 import time
 from typing import Dict, Any, Tuple
 from PIL import Image
-Image.MAX_IMAGE_PIXELS = None # 将像素上限设置为 None (无限制)
+
+from train_uact import run_uact_training
+Image.MAX_IMAGE_PIXELS = None
 # Import the main training functions and the config loader
 from config import get_config
 from train_normal import run_normal_training
@@ -23,6 +25,12 @@ def main(args: argparse.Namespace):
     config['training']['learning_rate'] = args.lr or config['training']['learning_rate']
     config['training']['batch_size'] = args.batch_size or config['training']['batch_size']
     config['dataset_path'] = args.dataset_path or config['dataset_path']
+
+    # Override conformal weights if provided
+    if args.size_weight is not None:
+        config['conformal']['size_weight'] = args.size_weight
+    if args.ce_weight is not None:
+        config['conformal']['cross_entropy_weight'] = args.ce_weight
 
     # Create a unique output directory for this run
     timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -45,13 +53,16 @@ def main(args: argparse.Namespace):
         run_normal_training(config)
     elif args.mode == 'conformal':
         run_conformal_training(config)
+    elif args.mode == 'uact':
+        run_uact_training(config)
     else:
-        raise ValueError(f"Invalid mode specified: {args.mode}. Choose 'normal' or 'conformal'.")
+        raise ValueError(f"Invalid mode. Choose 'normal', 'conformal', or 'uact'.")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run training for Conformal Prediction.")
     
-    parser.add_argument('--mode', type=str, default='conformal', choices=['normal', 'conformal'],
+    parser.add_argument('--mode', type=str, default='conformal', choices=['normal', 'conformal', 'uact'],
                         help="The training mode to run ('normal' for baseline, 'conformal' for our method).")
     
     # Optional arguments to override the config file
@@ -63,6 +74,10 @@ if __name__ == '__main__':
                         help="Learning rate. Overrides config default.")
     parser.add_argument('--batch_size', type=int, default=None,
                         help="Batch size. Overrides config default.")
+    parser.add_argument('--size_weight', type=float, default=None,
+                        help="Weight for size loss (overrides config['conformal']['size_weight']).")
+    parser.add_argument('--ce_weight', type=float, default=None,
+                        help="Weight for cross-entropy loss (overrides config['conformal']['cross_entropy_weight']).")
 
     args = parser.parse_args()
     main(args)

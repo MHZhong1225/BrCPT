@@ -135,7 +135,7 @@ if __name__ == '__main__':
     
     # IMPORTANT: Set this path to your 'latest_version' folder
     # which contains the 'train', 'val', and 'test' subfolders.
-    path_to_bracs_latest_version = './BRACS_Rol/latest_version'
+    path_to_bracs_latest_version = './histoimage.na.icar.cnr.it/BRACS_RoI/latest_version'
     
     if os.path.exists(path_to_bracs_latest_version):
         # You should run the calculate_stats.py script first to get these values

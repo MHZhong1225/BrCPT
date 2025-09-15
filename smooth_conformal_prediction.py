@@ -82,9 +82,10 @@ def smooth_conformal_quantile(
     # It returns a differentiable approximation of the quantile.
     return soft_quantile(scores, q=level, regularization_strength=regularization_strength)
 
+
 def smooth_predict_threshold(
     scores: torch.Tensor,
-    tau: torch.Tensor,
+    tau: torch.Tensor, # <--- 修改：现在可以是标量或张量
     temperature: float = 0.1
 ) -> torch.Tensor:
     """
@@ -103,8 +104,13 @@ def smooth_predict_threshold(
         torch.Tensor: A tensor of probabilities representing the soft prediction sets.
                       Shape: [n_pred, n_classes].
     """
-    return torch.sigmoid((scores - tau) / temperature)
+    # 如果tau是标量，则保持原样。
+    # 如果tau是一个 [batch_size] 的张量，我们需要将其 unsqueeze 以便广播。
+    if tau.ndim == 1:
+        tau = tau.unsqueeze(1) # 变形为 [batch_size, 1]
 
+    return torch.sigmoid((scores - tau) / temperature)
+    
 if __name__ == '__main__':
     # --- This is a test script to verify the smooth functions ---
     

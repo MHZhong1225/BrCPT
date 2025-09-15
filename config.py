@@ -28,8 +28,8 @@ def get_config() -> Dict[str, Any]:
         # --- Training Settings ---
         "training": {
             "epochs": 100,
-            "batch_size": 32,
-            "learning_rate": 1e-4,
+            "batch_size": 16,
+            "learning_rate": 1e-3,
             "momentum": 0.9,
             "weight_decay": 5e-4,
         },
@@ -43,8 +43,14 @@ def get_config() -> Dict[str, Any]:
             "fraction": 0.5, # Split ratio for cal/pred sets in a batch (50% / 50%)
             "temperature": 0.1, # For smooth_predict_threshold
             "regularization_strength": 0.01, # For torchsort's soft_quantile
-            "size_weight": 0.3, # Weight for the size loss term
+            "size_weight": 0.1, # Weight for the size loss term
             "cross_entropy_weight": 0.1, # Optional weight for standard CE loss for stability
+        },
+        
+        "threshold_net": {
+            "learning_rate": 0.001, # 阈值网络可以使用独立的学习率
+            "weight_decay": 1e-5,
+            "hidden_dim": 128      # 阈值网络MLP的隐藏层维度
         }
     }
     
