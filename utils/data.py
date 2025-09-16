@@ -90,7 +90,7 @@ def get_dataloaders(
     
     # Recommended to use a number of workers for faster data loading
     # num_workers can be os.cpu_count() for maximum performance
-    num_workers = 20
+    num_workers = 6
 
     dataloaders = {
         'train': DataLoader(

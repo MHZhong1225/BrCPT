@@ -8,8 +8,7 @@ from tqdm import tqdm
 import os
 from typing import Dict, Any
 
-# 导入我们的模型和工具
-from utils.models import UACTModel # 导入新的UACT模型
+from utils.models import UACTModel
 from utils import data
 import smooth_conformal_prediction as scp
 from utils import train_utils as cputils
