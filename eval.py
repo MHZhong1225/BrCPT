@@ -147,11 +147,11 @@ if __name__ == '__main__':
     #                     help='Path to the trained model checkpoint (.pth file).')
     parser.add_argument('--alpha', type=float, default=0.1,
                         help='The desired miscoverage level alpha (e.g., 0.1 for 90% target coverage).')
-    parser.add_argument('--mode', type=str, default='conformal', choices=['cp', 'uact', 'normal'],
+    parser.add_argument('--mode', type=str, default='uact', choices=['cp', 'uact', 'normal'],
                         help='Model architecture to instantiate for loading the checkpoint.')
     
     args = parser.parse_args()
-    args.model_path = f'./experiments/bracs/{args.mode}/{args.mode}_model.pth'
+    args.model_path = f'./experiments/bracs/{args.mode}/{args.mode}_model_best.pth'
     config = get_config()
     
     run_evaluation(config, args)

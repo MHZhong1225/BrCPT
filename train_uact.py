@@ -13,12 +13,13 @@ from utils import data
 import smooth_conformal_prediction as scp
 from utils import train_utils as cputils
 from train_normal import evaluate
+import torch.nn.functional as F
 
 def train_one_epoch_uact(
     model: UACTModel,
     dataloader: DataLoader,
     optimizer_backbone: optim.Optimizer,
-    optimizer_h: optim.Optimizer, # 阈值网络的独立优化器
+    optimizer_h: optim.Optimizer,
     config: Dict[str, Any],
     device: torch.device
 ) -> float:
@@ -38,7 +39,6 @@ def train_one_epoch_uact(
         if cal_split_size == 0 or cal_split_size == batch_size:
             continue
 
-        cal_inputs, pred_inputs = inputs[:cal_split_size], inputs[cal_split_size:]
         cal_labels, pred_labels = labels[:cal_split_size], labels[cal_split_size:]
 
         # --- 2. 联合前向传播 ---
@@ -76,7 +76,6 @@ def train_one_epoch_uact(
         )
 
         # c) 反向传播并更新主干网络
-        # 关键修复：添加 retain_graph=True
         loss_backbone.backward(retain_graph=True)
         optimizer_backbone.step()
 
@@ -147,6 +146,11 @@ def run_uact_training(config: Dict[str, Any]):
         model.classifier
     ).to(device)
 
+    # path是保存最佳模型的路径
+    save_path = os.path.join(config['output_dir'], 'uact_model_best.pth')
+    early_stopping = cputils.EarlyStopping(patience=10, verbose=True, path=save_path)
+
+
     print("\n--- Starting U-ACT Training ---")
     for epoch in range(train_config['epochs']):
         print(f"\nEpoch {epoch+1}/{train_config['epochs']}")
@@ -162,14 +166,28 @@ def run_uact_training(config: Dict[str, Any]):
 
         scheduler_backbone.step()
 
+        early_stopping(val_loss, model)
+        if early_stopping.early_stop:
+            print("Early stopping")
+            break # 跳出训练循环
     print("\n--- U-ACT Training Finished ---")
 
-    # 使用修复后的评估模型进行最终测试
-    test_loss, test_acc = evaluate(eval_model, dataloaders['test'], nn.CrossEntropyLoss(), device)
-    print(f"\nFinal Test Loss: {test_loss:.4f}, Final Test Accuracy: {test_acc:.4f}")
+    print(f"Loading best model from epoch with val_loss: {early_stopping.val_loss_min:.4f}")
+    model.load_state_dict(early_stopping.best_model_state_dict)
+    best_eval_model = nn.Sequential(
+        model.backbone,
+        nn.Flatten(),
+        model.classifier
+    ).to(device)
+    
+    test_loss, test_acc = evaluate(best_eval_model, dataloaders['test'], nn.CrossEntropyLoss(), device)
+    print(f"\nFinal Test Loss (from best model): {test_loss:.4f}, Final Test Accuracy: {test_acc:.4f}")
+    
+    torch.save(model.state_dict(), early_stopping.path)
+    print(f"Best model saved to {early_stopping.path}")
 
-    save_path = os.path.join(config['output_dir'], 'uact_model.pth')
-    os.makedirs(config['output_dir'], exist_ok=True)
-    torch.save(model.state_dict(), save_path)
-    print(f"Model saved to {save_path}")
+    # save_path = os.path.join(config['output_dir'], 'uact_model.pth')
+    # os.makedirs(config['output_dir'], exist_ok=True)
+    # torch.save(model.state_dict(), save_path)
+    # print(f"Model saved to {save_path}")
     

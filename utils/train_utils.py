@@ -2,6 +2,55 @@
 
 import torch
 import torch.nn as nn
+import numpy as np
+
+import copy
+
+class EarlyStopping:
+    """在验证集损失不再改善时提前停止训练。"""
+    def __init__(self, patience=7, verbose=False, delta=5e-4, path='checkpoint.pth'):
+        """
+        Args:
+            patience (int): 在上次验证集损失改善后，等待多少个epoch。
+            verbose (bool): 如果为True，则为每次验证集损失改善打印一条信息。
+            delta (float):  被认为是改善的最小变化量。
+            path (str):     保存最佳模型的路径。
+        """
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.val_loss_min = np.inf
+        self.delta = delta
+        self.path = path
+        self.best_model_state_dict = None
+
+    def __call__(self, val_loss, model):
+
+        score = -val_loss
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            if self.verbose:
+                print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+            self.counter = 0
+
+    def save_checkpoint(self, val_loss, model):
+        """当验证集损失下降时，保存模型。"""
+        if self.verbose:
+            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+        # 使用深拷贝来保存最佳模型的状态，而不是引用
+        self.best_model_state_dict = copy.deepcopy(model.state_dict())
+        self.val_loss_min = val_loss
 
 def compute_size_loss(
     confidence_sets: torch.Tensor,

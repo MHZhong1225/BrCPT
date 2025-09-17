@@ -193,7 +193,7 @@ def run_conformal_training(config: Dict[str, Any]):
     print(f"\nFinal Test Loss: {test_loss:.4f}, Final Test Accuracy: {test_acc:.4f}")
 
     # --- 7. Save the trained model ---
-    save_path = os.path.join(config['output_dir'], 'conformal_model.pth')
+    save_path = os.path.join(config['output_dir'], 'cp_model.pth')
     os.makedirs(config['output_dir'], exist_ok=True)
     torch.save(model.state_dict(), save_path)
     print(f"Model saved to {save_path}")
