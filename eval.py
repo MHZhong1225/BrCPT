@@ -63,9 +63,9 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
 
     # --- 3. Load Trained Model ---
     if args.mode == 'uact':
-        model = UACTModel(num_classes=config['num_classes'], pretrained=False)
+        model = models.get_model(model_type='uact',backbone_name=config['model']['name'],num_classes=config['num_classes'],pretrained=config['model']['pretrained'])
     else:
-        model = models.create_model(num_classes=config['num_classes'], pretrained=False)
+        model = models.get_model(model_type='standard',backbone_name=config['model']['name'],num_classes=config['num_classes'],pretrained=config['model']['pretrained'])
     
     if not os.path.exists(args.model_path):
         raise FileNotFoundError(f"Model checkpoint not found at: {args.model_path}")
@@ -85,11 +85,37 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
     # --- 5. Perform Conformal Prediction ---
     print(f"\nPerforming conformal prediction with alpha = {args.alpha}...")
     
-    tau = cp.calibrate_threshold(cal_probs, cal_labels, alpha=args.alpha)
-    print(f"Calibrated threshold (tau): {tau:.4f}")
 
-    prediction_sets = cp.predict_threshold(test_probs, tau)
-    
+    if args.cp_method == 'naive':
+        # 标准 naive split-CP：s = 1 - p_true；qhat 在 1-α 处；tau = 1 - qhat
+        p_true = cal_probs[torch.arange(len(cal_labels)), cal_labels]
+        scores = 1.0 - p_true
+        qhat = cp.conformal_quantile(scores, alpha=args.alpha)  # 分位
+        tau = 1.0 - qhat
+        print(f"Naive CP — calibrated tau: {tau:.4f}")
+        prediction_sets = cp.predict_threshold(test_probs, tau)  # probs >= tau
+    elif args.cp_method == 'aps':
+        qhat = cp.calibrate_aps(cal_probs, cal_labels, alpha=args.alpha)
+        print(f"APS — calibrated qhat: {qhat:.4f}")
+        prediction_sets = cp.predict_aps(test_probs, qhat, top1_guarantee=False)
+
+    elif args.cp_method == 'raps':
+        # 如果你要用正则，请把这两个参数从 args 里取出来并同时传给 calibrate 和 predict
+        k_reg = getattr(args, "k_reg", None)
+        lambda_reg = getattr(args, "lambda_reg", None)
+
+        tau = cp.calibrate_raps(cal_probs, cal_labels, alpha=args.alpha,
+                                k_reg=k_reg, lambda_reg=lambda_reg)
+        print(f"RAPS — calibrated tau: {tau:.4f}")
+
+        prediction_sets = cp.predict_raps(test_probs, tau,
+                                        k_reg=k_reg, lambda_reg=lambda_reg)
+    else:
+        raise ValueError(f"Unknown cp-method: {args.cp_method}")
+
+
+    empty_sets = (~prediction_sets.any(dim=1)).float().mean().item()
+    print("Empty prediction sets ratio:", empty_sets)
     # --- 6. Calculate and Report Metrics ---
     coverage = torch.mean(
         prediction_sets[torch.arange(len(test_labels)), test_labels].float()
@@ -143,15 +169,34 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate a trained model with Conformal Prediction.")
-    # parser.add_argument('--model_path', type=str, default='conformal',
-    #                     help='Path to the trained model checkpoint (.pth file).')
+    parser.add_argument('--dataset', type=str, default='breakhis', choices=['bracs', 'bach', 'breakhis'])
+    parser.add_argument('--xs', type=str, default='40X', choices=['40X', '100X', '200X', '400X', 'all'])
     parser.add_argument('--alpha', type=float, default=0.1,
                         help='The desired miscoverage level alpha (e.g., 0.1 for 90% target coverage).')
-    parser.add_argument('--mode', type=str, default='uact', choices=['cp', 'uact', 'normal'],
+    parser.add_argument('--model', type=str, default='resnet50', choices=['resnet18', 'resnet34', 'resnet50','efficientnet_b0'])
+    parser.add_argument('--mode', type=str, default='uact', choices=['conformal', 'uact', 'normal'],
                         help='Model architecture to instantiate for loading the checkpoint.')
-    
+    parser.add_argument('--num_classes', type=int, default=None,
+                    help="Number of classes in the dataset. Overrides config default.")
+    parser.add_argument('--cp-method', type=str, default='naive', choices=['naive','aps','raps'],
+                    help='选择常见的分裂保形方法: naive 或 aps')
+    parser.add_argument('--top1-guarantee', action='store_true',
+                    help='开启后保证每个样本至少包含 top-1 类')
+
     args = parser.parse_args()
-    args.model_path = f'./experiments/bracs/{args.mode}/{args.mode}_model_best.pth'
-    config = get_config()
-    
+    args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/model_best.pth'
+    print(args.model_path)
+
+    # 配置
+    config = get_config(dataset=args.dataset)
+    if args.num_classes: 
+        config['num_classes'] = args.num_classes
+    # 处理 breakhis 的 xs
+    if args.dataset == 'breakhis' and args.xs != 'all':
+        config['dataset_path'] = f'./datasets/{args.dataset}/{args.xs}'
+    else:
+        config['dataset_path'] = f'./datasets/{args.dataset}'
+    if args.model: config['model']['name'] = args.model
+
+    print(config['dataset_path'])
     run_evaluation(config, args)

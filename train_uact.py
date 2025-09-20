@@ -1,22 +1,33 @@
 # train_uact.py (Corrected Version)
+import os, random, numpy as np, torch
+SEED = 999
+os.environ["PYTHONHASHSEED"] = str(SEED)
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"  # 保证cublas确定性（CUDA 11+）
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed_all(SEED)
 
-import torch
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+torch.use_deterministic_algorithms(True, warn_only=False)
+
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import os
 from typing import Dict, Any
+from utils import models
 
-from utils.models import UACTModel
 from utils import data
-import smooth_conformal_prediction as scp
+from utils import smooth_conformal_prediction as scp
 from utils import train_utils as cputils
 from train_normal import evaluate
 import torch.nn.functional as F
 
 def train_one_epoch_uact(
-    model: UACTModel,
+    model: nn.Module,
     dataloader: DataLoader,
     optimizer_backbone: optim.Optimizer,
     optimizer_h: optim.Optimizer,
@@ -107,7 +118,7 @@ def train_one_epoch_uact(
     return epoch_loss
 
 def run_uact_training(config: Dict[str, Any]):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = config['device']
     print(f"Using device: {device}")
 
     train_config = config['training']
@@ -122,15 +133,35 @@ def run_uact_training(config: Dict[str, Any]):
     dataloaders = data_info['dataloaders']
     num_classes = len(data_info['class_names'])
 
-    model = UACTModel(num_classes=num_classes, pretrained=config['model']['pretrained'])
+    # model = UACTModel(num_classes=num_classes, pretrained=config['model']['pretrained'])
+    model = models.get_model(
+        model_type='uact',
+        backbone_name=config['model']['name'],
+        num_classes=num_classes,
+        pretrained=config['model']['pretrained'])
+
     model.to(device)
 
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print("--- Model Parameters ---")
+    print(f"Total Parameters:     {total_params / (1024*1024):.2f}M")
+    print(f"Trainable Parameters: {trainable_params_count/ (1024*1024):.2f}M")
+    print("------------------------")
+    
+    # optimizer_backbone = optim.SGD(
+    #     list(model.backbone.parameters()) + list(model.classifier.parameters()),
+    #     lr=train_config['learning_rate'],
+    #     momentum=train_config['momentum'],
+    #     weight_decay=train_config['weight_decay']
+    # )
     optimizer_backbone = optim.SGD(
-        list(model.backbone.parameters()) + list(model.classifier.parameters()),
-        lr=train_config['learning_rate'],
+        list(model.backbone.parameters()) + list(model.classifier.parameters()), 
+        lr=train_config['learning_rate'], 
         momentum=train_config['momentum'],
         weight_decay=train_config['weight_decay']
     )
+
     optimizer_h = optim.Adam(
         model.threshold_net.parameters(),
         lr=hnet_config['learning_rate'],
@@ -147,8 +178,14 @@ def run_uact_training(config: Dict[str, Any]):
     ).to(device)
 
     # path是保存最佳模型的路径
-    save_path = os.path.join(config['output_dir'], 'uact_model_best.pth')
-    early_stopping = cputils.EarlyStopping(patience=10, verbose=True, path=save_path)
+    # timestamp = time.strftime("%Y%m%d-%H%M%S")
+    # model_p = f"model_best_{timestamp}.pth"
+    model_p = f"model_best.pth"
+    save_dir = os.path.join(config['output_dir'], config['model']['name'])
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, model_p)
+
+    early_stopping = cputils.EarlyStopping(patience=15, verbose=True, path=save_path)
 
 
     print("\n--- Starting U-ACT Training ---")

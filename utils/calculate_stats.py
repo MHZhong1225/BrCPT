@@ -8,7 +8,9 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 # --- 1. 设置您的数据集路径和图像尺寸 ---
 # 请将此路径修改为您机器上 BRACS 数据集的 train 文件夹的绝对或相对路径
-DATASET_PATH = './histoimage.na.icar.cnr.it/BRACS_RoI/latest_version/train'
+dataset = 'bach' #  breakhis bracs bach
+# DATASET_PATH = f'./datasets/{dataset}/40X/train'
+DATASET_PATH = f'./datasets/{dataset}/train'
 IMAGE_SIZE = (224, 224) # 与您模型训练时使用的尺寸保持一致
 BATCH_SIZE = 32 # 可以根据您的内存大小调整批次
 

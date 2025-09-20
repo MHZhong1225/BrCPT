@@ -1,12 +1,26 @@
 # train_normal.py (PyTorch Version)
+# ==== deterministic setup ====
+import os, random, numpy as np, torch
 
-import torch
+SEED = 2024  # 两边脚本务必用同一个
+os.environ["PYTHONHASHSEED"] = str(SEED)
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"  # 保证cublas确定性（CUDA 11+）
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed_all(SEED)
+
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+torch.use_deterministic_algorithms(True, warn_only=False)
+
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import os
 from typing import Dict, Any, Tuple
+from utils import train_utils as cputils
 
 # Import from our refactored files
 from utils import models
@@ -92,10 +106,15 @@ def evaluate(
             
             # Forward pass
             outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            if isinstance(outputs, tuple):
+                logits = outputs[0]
+            else:
+                logits = outputs
+
+            loss = criterion(logits, labels)
             
             # Calculate accuracy
-            _, preds = torch.max(outputs, 1)
+            _, preds = torch.max(logits, 1)
             correct_predictions += torch.sum(preds == labels.data)
             total_samples += labels.size(0)
             
@@ -113,7 +132,7 @@ def run_normal_training(config: Dict[str, Any]):
     The main function to run a standard training and evaluation pipeline.
     """
     # --- 1. Setup ---
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = config['device']
     print(f"Using device: {device}")
     train_config = config['training']
 
@@ -129,8 +148,20 @@ def run_normal_training(config: Dict[str, Any]):
     num_classes = len(data_info['class_names'])
 
     # --- 3. Model ---
-    model = models.create_model(num_classes=num_classes, pretrained=True)
+    # model = models.create_model(num_classes=num_classes, pretrained=True)
+    model = models.get_model(
+        model_type='standard',
+        backbone_name=config['model']['name'], # 从config中读取backbone名称
+        num_classes=num_classes,
+        pretrained=config['model']['pretrained'])
     model.to(device)
+
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print("--- Model Parameters ---")
+    print(f"Total Parameters:     {total_params / (1024*1024):.2f}M")
+    print(f"Trainable Parameters: {trainable_params_count/ (1024*1024):.2f}M")
+    print("------------------------")
 
     # --- 4. Loss and Optimizer ---
     criterion = nn.CrossEntropyLoss()
@@ -142,6 +173,11 @@ def run_normal_training(config: Dict[str, Any]):
     )
     # Learning rate scheduler (optional but recommended)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+    model_p = f"model_best.pth"
+    save_dir = os.path.join(config['output_dir'], config['model']['name'])
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, model_p)
+    early_stopping = cputils.EarlyStopping(patience=15, verbose=True, path=save_path)
 
     # --- 5. Training Loop ---
     print("\n--- Starting Standard Training ---")
@@ -156,17 +192,27 @@ def run_normal_training(config: Dict[str, Any]):
         
         scheduler.step() # Update learning rate
 
-    print("\n--- Training Finished ---")
-    
-    # --- 6. Final Evaluation on Test Set ---
-    test_loss, test_acc = evaluate(model, dataloaders['test'], criterion, device)
-    print(f"\nFinal Test Loss: {test_loss:.4f}, Final Test Accuracy: {test_acc:.4f}")
 
-    # --- 7. Save the trained model (optional) ---
-    save_path = os.path.join(config['output_dir'], 'baseline_model.pth')
-    os.makedirs(config['output_dir'], exist_ok=True)
-    torch.save(model.state_dict(), save_path)
-    print(f"Model saved to {save_path}")
+        early_stopping(val_loss, model)
+        if early_stopping.early_stop:
+            print("Early stopping")
+            break # 跳出训练循环
+    print("\n--- Training Finished ---")
+    print(f"Loading best model from epoch with val_loss: {early_stopping.val_loss_min:.4f}")
+    state_dict = early_stopping.best_model_state_dict
+    model.load_state_dict(state_dict)
+    model.to(device)
+    model.eval()
+
+    # 2) 直接用原模型评测（evaluate 里应有 no_grad）
+    criterion = nn.CrossEntropyLoss()
+    test_loss, test_acc = evaluate(model, dataloaders['test'], criterion, device)
+    print(f"\nFinal Test Loss (from best model): {test_loss:.4f}, Final Test Accuracy: {test_acc:.4f}")
+    
+    torch.save(model.state_dict(), early_stopping.path)
+    print(f"Best model saved to {early_stopping.path}")
+
+
 
 if __name__ == '__main__':
     # --- This is a test script to run a full training cycle ---
