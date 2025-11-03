@@ -11,7 +11,7 @@ from typing import Dict, Any, Tuple
 
 # Import from our refactored PyTorch files
 from utils import models
-from utils.models import UACTModel
+from utils.models import CATModel
 from utils import data
 from utils import conformal_prediction as cp
 from config import get_config
@@ -33,7 +33,7 @@ def get_predictions(
             inputs, labels = inputs.to(device), labels.to(device)
             
             outputs = model(inputs)
-            # UACTModel returns (logits, h_x)
+            # CATModel returns (logits, h_x)
             if isinstance(outputs, (tuple, list)):
                 outputs = outputs[0]
             probs = nn.functional.softmax(outputs, dim=1)
@@ -62,8 +62,8 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
     test_loader = data_info['dataloaders']['test']
 
     # --- 3. Load Trained Model ---
-    if args.mode == 'uact':
-        model = models.get_model(model_type='uact',backbone_name=config['model']['name'],num_classes=config['num_classes'],pretrained=config['model']['pretrained'])
+    if args.mode == 'cat':
+        model = models.get_model(model_type='cat',backbone_name=config['model']['name'],num_classes=config['num_classes'],pretrained=config['model']['pretrained'])
     else:
         model = models.get_model(model_type='standard',backbone_name=config['model']['name'],num_classes=config['num_classes'],pretrained=config['model']['pretrained'])
     
@@ -173,8 +173,8 @@ if __name__ == '__main__':
     parser.add_argument('--xs', type=str, default='40X', choices=['40X', '100X', '200X', '400X', 'all'])
     parser.add_argument('--alpha', type=float, default=0.1,
                         help='The desired miscoverage level alpha (e.g., 0.1 for 90% target coverage).')
-    parser.add_argument('--model', type=str, default='resnet50', choices=['resnet18', 'resnet34', 'resnet50','efficientnet_b0'])
-    parser.add_argument('--mode', type=str, default='uact', choices=['conformal', 'uact', 'normal'],
+    parser.add_argument('--model', type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50','efficientnet_b0'])
+    parser.add_argument('--mode', type=str, default='cat', choices=['conformal', 'cat', 'normal'],
                         help='Model architecture to instantiate for loading the checkpoint.')
     parser.add_argument('--num_classes', type=int, default=None,
                     help="Number of classes in the dataset. Overrides config default.")
@@ -184,7 +184,10 @@ if __name__ == '__main__':
                     help='开启后保证每个样本至少包含 top-1 类')
 
     args = parser.parse_args()
-    args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/model_best.pth'
+    if args.dataset == 'breakhis':
+        args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/{args.xs}/model_best.pth'
+    else:
+        args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/model_best.pth'
     print(args.model_path)
 
     # 配置

@@ -197,7 +197,11 @@ def run_conformal_training(config: Dict[str, Any]):
     
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
     model_p = f"model_best.pth"
-    save_dir = os.path.join(config['output_dir'], config['model']['name'])
+    if config['dataset']=='breakhis':
+        save_dir = os.path.join(config['output_dir'], config['model']['name'], config['xs'])
+    else:
+        save_dir = os.path.join(config['output_dir'], config['model']['name'])
+
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, model_p)
     early_stopping = cputils.EarlyStopping(patience=15, verbose=True, path=save_path)
@@ -233,7 +237,6 @@ def run_conformal_training(config: Dict[str, Any]):
     test_loss, test_acc = evaluate(model, dataloaders['test'], criterion, device)
     print(f"\nFinal Test Loss (from best model): {test_loss:.4f}, Final Test Accuracy: {test_acc:.4f}")
 
-    
     torch.save(model.state_dict(), early_stopping.path)
     print(f"Best model saved to {early_stopping.path}")
 

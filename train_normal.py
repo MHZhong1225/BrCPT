@@ -2,9 +2,9 @@
 # ==== deterministic setup ====
 import os, random, numpy as np, torch
 
-SEED = 2024  # 两边脚本务必用同一个
+SEED = 2024
 os.environ["PYTHONHASHSEED"] = str(SEED)
-os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"  # 保证cublas确定性（CUDA 11+）
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
 random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -151,7 +151,7 @@ def run_normal_training(config: Dict[str, Any]):
     # model = models.create_model(num_classes=num_classes, pretrained=True)
     model = models.get_model(
         model_type='standard',
-        backbone_name=config['model']['name'], # 从config中读取backbone名称
+        backbone_name=config['model']['name'],
         num_classes=num_classes,
         pretrained=config['model']['pretrained'])
     model.to(device)
@@ -174,7 +174,10 @@ def run_normal_training(config: Dict[str, Any]):
     # Learning rate scheduler (optional but recommended)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
     model_p = f"model_best.pth"
-    save_dir = os.path.join(config['output_dir'], config['model']['name'])
+    if config['dataset']=='breakhis':
+        save_dir = os.path.join(config['output_dir'], config['model']['name'], config['xs'])
+    else:
+        save_dir = os.path.join(config['output_dir'], config['model']['name'])
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, model_p)
     early_stopping = cputils.EarlyStopping(patience=15, verbose=True, path=save_path)

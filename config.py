@@ -70,11 +70,12 @@ def get_config(
         "device": "cuda", # "cuda" or "cpu"
 
         # --- Data Settings ---
+        "dataset": "breakhis",
         "dataset_path": "./histoimage.na.icar.cnr.it/BRACS_RoI/latest_version", # IMPORTANT: Update this path
         "image_size": (224, 224),
         "num_classes": 7,
         # IMPORTANT: Replace these with the actual values calculated from your training set
-
+        "xs": None,
         
         # --- Model Settings ---
         "model": {

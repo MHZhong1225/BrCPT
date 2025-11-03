@@ -37,7 +37,7 @@ def _create_backbone(backbone_name: str, pretrained: bool = True) -> Tuple[nn.Mo
         
     return backbone, num_ftrs
 
-# --- UACT 模型的定义 ---
+# --- CAT 模型的定义 ---
 class ThresholdNet(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 128):
         super(ThresholdNet, self).__init__()
@@ -50,9 +50,9 @@ class ThresholdNet(nn.Module):
     def forward(self, features: torch.Tensor) -> torch.Tensor:
         return self.net(features).squeeze(1)
 
-class UACTModel(nn.Module):
+class CATModel(nn.Module):
     def __init__(self, backbone_module: nn.Module, num_ftrs: int, num_classes: int):
-        super(UACTModel, self).__init__()
+        super(CATModel, self).__init__()
         self.backbone = backbone_module
         self.classifier = nn.Linear(num_ftrs, num_classes)
         self.threshold_net = ThresholdNet(input_dim=num_ftrs)
@@ -77,7 +77,7 @@ def get_model(
     统一的模型创建函数。
 
     Args:
-        model_type (str): 模型类型, 'standard' 或 'uact'.
+        model_type (str): 模型类型, 'standard' 或 'cat'.
         backbone_name (str): Backbone名称, e.g., 'resnet34'.
         num_classes (int): 分类数量.
         pretrained (bool): 是否使用预训练权重.
@@ -97,11 +97,11 @@ def get_model(
             nn.Flatten(),
             nn.Linear(num_ftrs, num_classes)
         )
-    elif model_type == 'uact':
-        print(f"Creating a 'UACT' model with '{backbone_name}' backbone.")
-        model = UACTModel(backbone_module, num_ftrs, num_classes)
+    elif model_type == 'cat':
+        print(f"Creating a 'CAT' model with '{backbone_name}' backbone.")
+        model = CATModel(backbone_module, num_ftrs, num_classes)
     else:
-        raise ValueError(f"Model type '{model_type}' is not supported. Choose 'standard' or 'uact'.")
+        raise ValueError(f"Model type '{model_type}' is not supported. Choose 'standard' or 'cat'.")
         
     print(f"Model created. Final layer configured for {num_classes} classes.")
     return model
