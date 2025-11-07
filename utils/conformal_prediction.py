@@ -79,7 +79,7 @@ def calibrate_raps(
     conformity_scores = cum_probs[torch.arange(n, device=labels.device), true_rank]
 
     if reg:
-        # 经典 RAPS：加 lambda * max(0, rank+1 - k_reg)
+        #  RAPS：加 lambda * max(0, rank+1 - k_reg)
         penalty = (true_rank.to(conformity_scores.dtype) + 1.0) - float(k_reg)
         penalty = torch.clamp(penalty, min=0.0) * float(lambda_reg)
         # conformity_scores = conformity_scores + penalty
@@ -108,11 +108,6 @@ def predict_aps(probs: torch.Tensor, qhat: float, top1_guarantee: bool=True) -> 
     with torch.no_grad():
         sorted_probs, sorted_idx = torch.sort(probs, dim=1, descending=True)
         cumsums = torch.cumsum(sorted_probs, dim=1)
-        # 严格小于阈值的都保留（这对应前 L-1 个）
-        # keep_sorted = (cumsums - sorted_probs) < qhat
-        # # 把“首次 >= qhat”的下一位补进去
-        # first_cross = (~keep_sorted).float().cumsum(dim=1).eq(1) & (cumsums >= qhat)
-        # keep_sorted = keep_sorted | first_cross
         keep_sorted = cumsums <= qhat
         keep = torch.zeros_like(keep_sorted, dtype=torch.bool)
         keep.scatter_(1, sorted_idx, keep_sorted)
@@ -154,11 +149,6 @@ def predict_raps(
     else:
         adj_cum = cum_probs
 
-    # 严格小于阈值的先保留
-    # keep_sorted = (adj_cum - sorted_probs) < tau
-    # # 再把首次跨越阈值的下一位补进去
-    # first_cross = (~keep_sorted).float().cumsum(dim=1).eq(1) & (adj_cum >= tau)
-    # keep_sorted = keep_sorted | first_cross
     keep_sorted = adj_cum <= tau
 
     prediction_sets = torch.zeros_like(keep_sorted, dtype=torch.bool)
@@ -168,20 +158,3 @@ def predict_raps(
 
 
 
-# def calibrate_threshold(
-#     probs: torch.Tensor,
-#     labels: torch.Tensor,
-#     alpha: float = 0.1
-# ) -> float:
-#     """Naive split CP: s = 1 - p_true; qhat at 1-alpha; tau = 1 - qhat."""
-#     with torch.no_grad():
-#         p_true = probs[torch.arange(len(labels)), labels]
-#         scores = 1.0 - p_true  # 非一致度越大越不“自信”
-#         n = scores.numel()
-#         # q = ceil((n+1)*(1-alpha)) / n  —— 标准有限样本修正
-#         k = int(torch.ceil(torch.tensor((n + 1) * (1 - alpha))).item())
-#         k = max(1, min(k, n))
-#         qhat = torch.kthvalue(scores, k).values.item()  # kth-value 等价分位
-
-#         tau = 1.0 - qhat
-#         return float(tau)

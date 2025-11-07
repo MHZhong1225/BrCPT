@@ -4,14 +4,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import numpy as np
 import os
 import argparse
 from typing import Dict, Any, Tuple
 
 # Import from our refactored PyTorch files
 from utils import models
-from utils.models import CATModel
 from utils import data
 from utils import conformal_prediction as cp
 from config import get_config
@@ -86,21 +84,26 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
     print(f"\nPerforming conformal prediction with alpha = {args.alpha}...")
     
 
-    if args.cp_method == 'naive':
-        # 标准 naive split-CP：s = 1 - p_true；qhat 在 1-α 处；tau = 1 - qhat
+    if args.cp_method == 'thr':
         p_true = cal_probs[torch.arange(len(cal_labels)), cal_labels]
         scores = 1.0 - p_true
         qhat = cp.conformal_quantile(scores, alpha=args.alpha)  # 分位
         tau = 1.0 - qhat
-        print(f"Naive CP — calibrated tau: {tau:.4f}")
+        print(f"THR — calibrated tau: {tau:.4f}")
         prediction_sets = cp.predict_threshold(test_probs, tau)  # probs >= tau
+        top1_guarantee=True
+        if top1_guarantee:
+            empty_sets_mask = ~prediction_sets.any(dim=1)
+            if empty_sets_mask.any():
+                top1_preds = torch.argmax(test_probs, dim=1)
+                prediction_sets[empty_sets_mask, top1_preds[empty_sets_mask]] = True
+
     elif args.cp_method == 'aps':
         qhat = cp.calibrate_aps(cal_probs, cal_labels, alpha=args.alpha)
         print(f"APS — calibrated qhat: {qhat:.4f}")
-        prediction_sets = cp.predict_aps(test_probs, qhat, top1_guarantee=False)
+        prediction_sets = cp.predict_aps(test_probs, qhat, top1_guarantee=True)
 
     elif args.cp_method == 'raps':
-        # 如果你要用正则，请把这两个参数从 args 里取出来并同时传给 calibrate 和 predict
         k_reg = getattr(args, "k_reg", None)
         lambda_reg = getattr(args, "lambda_reg", None)
 
@@ -178,10 +181,7 @@ if __name__ == '__main__':
                         help='Model architecture to instantiate for loading the checkpoint.')
     parser.add_argument('--num_classes', type=int, default=None,
                     help="Number of classes in the dataset. Overrides config default.")
-    parser.add_argument('--cp-method', type=str, default='naive', choices=['naive','aps','raps'],
-                    help='选择常见的分裂保形方法: naive 或 aps')
-    parser.add_argument('--top1-guarantee', action='store_true',
-                    help='开启后保证每个样本至少包含 top-1 类')
+    parser.add_argument('--cp-method', type=str, default='thr', choices=['thr','aps','raps'])
 
     args = parser.parse_args()
     if args.dataset == 'breakhis':
@@ -190,11 +190,9 @@ if __name__ == '__main__':
         args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/model_best.pth'
     print(args.model_path)
 
-    # 配置
     config = get_config(dataset=args.dataset)
     if args.num_classes: 
         config['num_classes'] = args.num_classes
-    # 处理 breakhis 的 xs
     if args.dataset == 'breakhis' and args.xs != 'all':
         config['dataset_path'] = f'./datasets/{args.dataset}/{args.xs}'
     else:

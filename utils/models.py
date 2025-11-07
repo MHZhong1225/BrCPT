@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
-# --- 内部辅助函数，用于创建和处理Backbone ---
 def _create_backbone(backbone_name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
     """
     一个内部辅助函数，用于加载指定的backbone并移除其分类头。
@@ -37,7 +36,6 @@ def _create_backbone(backbone_name: str, pretrained: bool = True) -> Tuple[nn.Mo
         
     return backbone, num_ftrs
 
-# --- CAT 模型的定义 ---
 class ThresholdNet(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 128):
         super(ThresholdNet, self).__init__()
@@ -66,7 +64,6 @@ class CATModel(nn.Module):
         
         return logits, h_x
 
-# --- 最终的、统一的模型创建函数 ---
 def get_model(
     model_type: str, 
     backbone_name: str, 
@@ -85,13 +82,10 @@ def get_model(
     Returns:
         nn.Module: 构建好的PyTorch模型.
     """
-    # 1. 创建基础的backbone特征提取器
     backbone_module, num_ftrs = _create_backbone(backbone_name, pretrained)
     
-    # 2. 根据模型类型构建最终模型
     if model_type == 'standard':
         print(f"Creating a 'standard' model with '{backbone_name}' backbone.")
-        # 对于标准模型，我们只需要在backbone后加上分类头
         model = nn.Sequential(
             backbone_module,
             nn.Flatten(),

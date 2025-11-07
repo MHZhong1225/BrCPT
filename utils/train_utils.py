@@ -48,7 +48,6 @@ class EarlyStopping:
         """当验证集损失下降时，保存模型。"""
         if self.verbose:
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
-        # 使用深拷贝来保存最佳模型的状态，而不是引用
         self.best_model_state_dict = copy.deepcopy(model.state_dict())
         self.val_loss_min = val_loss
 

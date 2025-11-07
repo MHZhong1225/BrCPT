@@ -10,9 +10,7 @@ from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import datasets, transforms
 from PIL import Image
 
-# -------------------------------
-# 通用:BRACS或已分好train/val/test时沿用的函数
-# -------------------------------
+
 def get_dataloaders_imagefolder(
     dataset_path: str,
     image_size: Tuple[int, int] = (224, 224),
@@ -57,7 +55,7 @@ def get_dataloaders_imagefolder(
     }
 
 # -------------------------------
-# BreakHis 专用解析与按病人划分
+# BreakHis 
 # -------------------------------
 
 # 亚型映射（8类）
@@ -152,7 +150,6 @@ class BreakHisDataset(Dataset):
         elif task == "multiclass":
             self.samples = [s for s in self.samples if s["subcode"] in MULTI_LABELS]
             self.num_classes = len(MULTI_LABELS)
-            # 以固定顺序返回 8 类名称
             self.class_names = [SUBTYPE_CODES[k] for k in MULTI_LABELS.keys()]
         else:
             raise ValueError("task must be 'binary' or 'multiclass'")
@@ -215,7 +212,6 @@ def get_dataloaders_breakhis(
     seed: int = 2025,
     train_ratio: float = 0.7, val_ratio: float = 0.15, test_ratio: float = 0.15,
 ) -> Dict[str, Any]:
-    # 1) 定义变换
     train_tf = transforms.Compose([
         transforms.Resize(image_size),
         transforms.RandomHorizontalFlip(),
@@ -231,14 +227,11 @@ def get_dataloaders_breakhis(
         transforms.Normalize(mean, std)
     ])
 
-    # 2) 构建完整数据集
     full_ds = BreakHisDataset(root=dataset_path, task=task, magnifications=magnifications, transform=train_tf)
 
-    # 3) 按病人划分索引（避免泄露）
+    # 3) 按病人划分索引
     tr_idx, va_idx, te_idx = _split_by_patient(full_ds.samples, train_ratio, val_ratio, test_ratio, seed)
 
-    # 4) 组装子集（val/test 用无增强的变换）
-    # 这里为了简洁，复制两个 dataset 实例分别赋不同 transform
     val_ds = BreakHisDataset(dataset_path, task=task, magnifications=magnifications, transform=val_test_tf)
     test_ds = BreakHisDataset(dataset_path, task=task, magnifications=magnifications, transform=val_test_tf)
 
@@ -260,9 +253,7 @@ def get_dataloaders_breakhis(
         'num_classes': full_ds.num_classes
     }
 
-# -------------------------------
-# 统一入口:如果发现 train/val/test 就走 ImageFolder，否则走 BreakHis 自动划分
-# -------------------------------
+
 def get_dataloaders(
     dataset_path: str,
     image_size: Tuple[int, int] = (224, 224),
