@@ -1,5 +1,4 @@
-# train_normal.py (PyTorch Version)
-# ==== deterministic setup ====
+# train_normal.py
 import os, random, numpy as np, torch
 
 SEED = 2024
@@ -199,7 +198,7 @@ def run_normal_training(config: Dict[str, Any]):
         early_stopping(val_loss, model)
         if early_stopping.early_stop:
             print("Early stopping")
-            break # 跳出训练循环
+            break
     print("\n--- Training Finished ---")
     print(f"Loading best model from epoch with val_loss: {early_stopping.val_loss_min:.4f}")
     state_dict = early_stopping.best_model_state_dict
@@ -207,7 +206,6 @@ def run_normal_training(config: Dict[str, Any]):
     model.to(device)
     model.eval()
 
-    # 2) 直接用原模型评测（evaluate 里应有 no_grad）
     criterion = nn.CrossEntropyLoss()
     test_loss, test_acc = evaluate(model, dataloaders['test'], criterion, device)
     print(f"\nFinal Test Loss (from best model): {test_loss:.4f}, Final Test Accuracy: {test_acc:.4f}")

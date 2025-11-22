@@ -175,7 +175,7 @@ def run_conformal_training(config: Dict[str, Any]):
     # --- 3. Model ---
     model = models.get_model(
         model_type='standard',
-        backbone_name=config['model']['name'], # 从config中读取backbone名称
+        backbone_name=config['model']['name'],
         num_classes=num_classes,
         pretrained=config['model']['pretrained'])
     model.to(device)
@@ -223,7 +223,7 @@ def run_conformal_training(config: Dict[str, Any]):
         early_stopping(val_loss, model)
         if early_stopping.early_stop:
             print("Early stopping")
-            break # 跳出训练循环
+            break 
     print("\n--- Conformal Training Finished ---")
 
     print(f"Loading best model from epoch with val_loss: {early_stopping.val_loss_min:.4f}")
@@ -250,8 +250,8 @@ if __name__ == '__main__':
         'dataset_path': './BRACS_Rol/latest_version', # IMPORTANT: Update this path
         'output_dir': './experiments/conformal_test',
         'device': 'cuda',
-        'mean': (0.712733, 0.545225, 0.685850), # Placeholder
-        'std': (0.170330, 0.209620, 0.151623),  # Placeholder
+        'mean': (0.712733, 0.545225, 0.685850),
+        'std': (0.170330, 0.209620, 0.151623),
 
         'model': {'pretrained': True},
         'training': {

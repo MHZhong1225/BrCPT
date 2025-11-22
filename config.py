@@ -2,7 +2,6 @@
 
 from typing import Dict, Any
 
-# ---- Dataset-specific presets (请按你实际数据计算结果替换这些占位值) ----
 DATASET_PRESETS = {
     "bach": {        # BACH
         "num_classes": 4,
@@ -45,7 +44,7 @@ def apply_dataset_preset(
             cfg["std"]  = preset["std"]
         else:
             print(f"[WARN] Unknown dataset preset: {dataset}. Using defaults in get_config().")
-    # 手动覆盖优先
+
     if num_classes is not None:
         cfg["num_classes"] = num_classes
     if mean is not None:
@@ -106,9 +105,9 @@ def get_config(
         },
         
         "threshold_net": {
-            "learning_rate": 0.001, # 阈值网络可以使用独立的学习率
+            "learning_rate": 0.001,
             "weight_decay": 1e-5,
-            "hidden_dim": 128      # 阈值网络MLP的隐藏层维度
+            "hidden_dim": 128     
         }
     }
     

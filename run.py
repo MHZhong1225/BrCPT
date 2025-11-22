@@ -1,83 +1,101 @@
-# run.py (Correct PyTorch Version)
+# run.py (Upgraded with argparse for flexibility)
 
 import argparse
 import os
-import time
-from typing import Dict, Any, Tuple
 from PIL import Image
-
-from train_uact import run_uact_training
+import torch
 Image.MAX_IMAGE_PIXELS = None
-# Import the main training functions and the config loader
 from config import get_config
 from train_normal import run_normal_training
 from train_conformal import run_conformal_training
+from cat_v2 import run_cat_training_v2
 
-def main(args: argparse.Namespace):
-    """
-    The main entry point for running experiments.
-    """
-    # --- 1. Load and customize configuration ---
-    config = get_config()
-    
-    # Update config with command-line arguments if they are provided
-    config['training']['epochs'] = args.epochs or config['training']['epochs']
-    config['training']['learning_rate'] = args.lr or config['training']['learning_rate']
-    config['training']['batch_size'] = args.batch_size or config['training']['batch_size']
-    config['dataset_path'] = args.dataset_path or config['dataset_path']
+def main():
+    parser = argparse.ArgumentParser(description="Run training for Conformal Prediction.")
+    parser.add_argument('--cuda', type=str, default='1', help="Device to use, e.g., 'cpu', '0', '1'.")
+    parser.add_argument('--mode', type=str, default='cat', choices=['normal', 'conformal', 'cat'])
 
-    # Override conformal weights if provided
-    if args.size_weight is not None:
-        config['conformal']['size_weight'] = args.size_weight
-    if args.ce_weight is not None:
-        config['conformal']['cross_entropy_weight'] = args.ce_weight
+    parser.add_argument('--dataset', type=str, default='breakhis', choices=['bracs', 'bach', 'breakhis'])
+    parser.add_argument('--num_classes', type=int, default=7,
+                        help="Number of classes in the dataset. Overrides config default.")
+    parser.add_argument('--xs', type=str, default='40X', choices=['40X', '100X', '200X', '400X'])
 
-    # Create a unique output directory for this run
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    run_name = f"{args.mode}_{timestamp}"
+    parser.add_argument('--model', type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50','efficientnet_b0'])
+    parser.add_argument('--output_dir', type=str, default=None,
+                        help="Directory to save experiment results. Overrides config default.")
+
+    # training
+    parser.add_argument('--epochs', type=int, default=None,
+                        help="Number of training epochs. Overrides config default.")
+    parser.add_argument('--batch_size', type=int, default=16,
+                        help="Batch size. Overrides config default.")
+    parser.add_argument('--lr', type=float, default=1e-3,
+                        help="Learning rate for the backbone. Overrides config default.")
+
+
+    # conformal
+    parser.add_argument("--size_weight", type=float, default=0.05)
+    parser.add_argument("--regularization_strength", type=float, default=0.01)
+    parser.add_argument("--cross_entropy_weight", type=float, default=0.1)
+
+
+    args = parser.parse_args()
+
+    config = get_config(dataset=args.dataset)
+    args.output_dir = f'./experiments/{args.dataset}'
+    if args.dataset: 
+        config['dataset_path'] = f'./datasets/{args.dataset}' 
+        if args.dataset == 'breakhis': config['dataset_path'] = f'./datasets/{args.dataset}/{args.xs}' 
+    if args.num_classes: config['num_classes'] = args.num_classes
+    if args.epochs: config['training']['epochs'] = args.epochs
+    if args.batch_size: config['training']['batch_size'] = args.batch_size
+    if args.lr: config['training']['learning_rate'] = args.lr
+
+
+    if args.output_dir: config['output_dir'] = args.output_dir
+    if args.model: config['model']['name'] = args.model
+    if not torch.cuda.is_available():
+        device = torch.device("cpu")
+    else:
+        device = torch.device(f'cuda:{args.cuda}')
+    config['device'] = device 
+    config['xs'] = args.xs
+    config['dataset'] = args.dataset
+    is_conf_mode = args.mode in ("conformal", "cat")
+
+    if is_conf_mode:
+        conf = config.setdefault("conformal", {})
+        if args.size_weight is not None:
+            conf["size_weight"] = args.size_weight
+        if args.cross_entropy_weight is not None:
+            conf["cross_entropy_weight"] = args.cross_entropy_weight
+        if args.regularization_strength is not None:
+            conf["regularization_strength"] = args.regularization_strength
+    else:
+        config.pop("conformal", None)
+
+    run_name = f"{args.mode}"
     config['output_dir'] = os.path.join(config['output_dir'], run_name)
     os.makedirs(config['output_dir'], exist_ok=True)
     
     print("--- Configuration for this run ---")
     for section, settings in config.items():
-        print(f"[{section}]")
         if isinstance(settings, dict):
+            print(f"[{section}]")
             for key, value in settings.items():
                 print(f"  {key}: {value}")
         else:
-            print(f"  {settings}")
+            print(f"{section}: {settings}")
     print("------------------------------------")
 
-    # --- 2. Dispatch to the correct training function based on mode ---
     if args.mode == 'normal':
         run_normal_training(config)
     elif args.mode == 'conformal':
         run_conformal_training(config)
-    elif args.mode == 'uact':
-        run_uact_training(config)
+    elif args.mode == 'cat':
+        run_cat_training_v2(config)
     else:
-        raise ValueError(f"Invalid mode. Choose 'normal', 'conformal', or 'uact'.")
-
+        raise ValueError(f"Invalid mode specified: {args.mode}.")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Run training for Conformal Prediction.")
-    
-    parser.add_argument('--mode', type=str, default='uact', choices=['normal', 'conformal', 'uact'],
-                        help="The training mode to run ('normal' for baseline, 'conformal' for our method).")
-    
-    # Optional arguments to override the config file
-    parser.add_argument('--dataset_path', type=str, default=None,
-                        help="Path to the BRACS dataset root folder. Overrides config default.")
-    parser.add_argument('--epochs', type=int, default=None,
-                        help="Number of training epochs. Overrides config default.")
-    parser.add_argument('--lr', type=float, default=None,
-                        help="Learning rate. Overrides config default.")
-    parser.add_argument('--batch_size', type=int, default=None,
-                        help="Batch size. Overrides config default.")
-    parser.add_argument('--size_weight', type=float, default=None,
-                        help="Weight for size loss (overrides config['conformal']['size_weight']).")
-    parser.add_argument('--ce_weight', type=float, default=None,
-                        help="Weight for cross-entropy loss (overrides config['conformal']['cross_entropy_weight']).")
-
-    args = parser.parse_args()
-    main(args)
+    main()
