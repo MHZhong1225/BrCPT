@@ -8,7 +8,7 @@ Image.MAX_IMAGE_PIXELS = None
 from config import get_config
 from train_normal import run_normal_training
 from train_conformal import run_conformal_training
-from cat_v2 import run_cat_training_v2
+from cat import run_cat_training
 
 def main():
     parser = argparse.ArgumentParser(description="Run training for Conformal Prediction.")
@@ -93,7 +93,7 @@ def main():
     elif args.mode == 'conformal':
         run_conformal_training(config)
     elif args.mode == 'cat':
-        run_cat_training_v2(config)
+        run_cat_training(config)
     else:
         raise ValueError(f"Invalid mode specified: {args.mode}.")
 

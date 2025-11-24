@@ -129,9 +129,7 @@ def train_one_epoch_conformal(
         # total_loss = conformal_loss + ce_loss
         
         
-        # --- STABILITY FIX: Use a Stable Linear Combination of Losses ---
-        # Remove the unstable log transform.
-        # Add a standard Cross-Entropy loss as a stabilizer.
+        # --- Use a Stable Linear Combination of Losses ---
         ce_loss = nn.CrossEntropyLoss()(outputs, labels)
         
         total_loss = (
