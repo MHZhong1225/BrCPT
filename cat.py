@@ -123,7 +123,8 @@ def train_one_epoch_cat(
         # Threshold tau = h - qhat
         tau_pred = pred_h - qhat_soft
         
-        # Soft sets
+        # Soft 
+        
         soft_sets = smooth_predict_threshold(pred_probs, tau_pred, temperature=T)
 
         # ---- 3. Losses ----
@@ -221,7 +222,12 @@ def run_cat_training(config: Dict[str, Any]):
         optimizer_h, mode='min', factor=0.5, patience=5
     )
 
-    loss_matrix = build_loss_matrix(num_classes, device, config.get("penalties", None))
+    # loss_matrix = build_loss_matrix(num_classes, device, config.get("penalties", None))
+    loss_matrix = build_loss_matrix(num_classes, device)
+    beta = 0.1
+    I = torch.eye(num_classes, device=device)
+    loss_matrix = loss_matrix + beta * (1 - I)
+
     eval_model = nn.Sequential(model.backbone, nn.Flatten(), model.classifier).to(device)
 
     model_p = "model_best.pth"
@@ -267,3 +273,4 @@ def run_cat_training(config: Dict[str, Any]):
     
     torch.save(model.state_dict(), save_path)
     print(f"Best model saved to {save_path}")
+    

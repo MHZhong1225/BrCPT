@@ -111,7 +111,7 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
             # 2. Calibration Score: s = h - p_true
             # (No ReLU, No Log)
             cal_p_true = cal_probs[torch.arange(len(cal_labels)), cal_labels]
-            s_cal = cal_h_val - cal_p_true 
+            s_cal = torch.relu(cal_h_val - cal_p_true) 
 
             # 3. Calibrate Qhat
             qhat = cp.conformal_quantile(s_cal, alpha=args.alpha)
