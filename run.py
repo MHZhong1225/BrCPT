@@ -1,4 +1,4 @@
-# run.py (Upgraded with argparse for flexibility)
+# run.py
 
 import argparse
 import os
@@ -19,8 +19,9 @@ def main():
     parser.add_argument('--num_classes', type=int, default=7,
                         help="Number of classes in the dataset. Overrides config default.")
     parser.add_argument('--xs', type=str, default='40X', choices=['40X', '100X', '200X', '400X'])
+    parser.add_argument('--alpha', type=float, default=0.05)
 
-    parser.add_argument('--model', type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50','efficientnet_b0'])
+    parser.add_argument('--model', type=str, default='resnet18', choices=['resnet18', 'resnet50','efficientnet_b0'])
     parser.add_argument('--output_dir', type=str, default=None,
                         help="Directory to save experiment results. Overrides config default.")
 
@@ -71,6 +72,8 @@ def main():
             conf["cross_entropy_weight"] = args.cross_entropy_weight
         if args.regularization_strength is not None:
             conf["regularization_strength"] = args.regularization_strength
+        if args.alpha is not None:
+            config["alpha"] = args.alpha
     else:
         config.pop("conformal", None)
 

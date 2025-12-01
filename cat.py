@@ -1,4 +1,4 @@
-# cat.py (ReLU-Residual CP + No H-Reg)
+# cat.py 
 
 import os
 import random
@@ -15,7 +15,6 @@ from utils import data
 from utils import smooth_conformal_prediction as scp
 from utils import train_utils as cputils
 from train_normal import evaluate
-from utils.smooth_conformal_prediction import soft_quantile, smooth_predict_threshold
 
 SEED = 999
 os.environ["PYTHONHASHSEED"] = str(SEED)
@@ -62,15 +61,14 @@ def train_one_epoch_cat(
     frac   = cp_cfg.get('fraction', 0.5)
     alpha  = float(cp_cfg.get('alpha', 0.1))
     
-    # 温度系数：0.5 比较适中
+
     T = float(cp_cfg.get('temperature', 0.5)) 
     reg = float(cp_cfg.get('regularization_strength', 0.1))
 
-    size_w_base = float(cp_cfg.get('size_weight', 0.1))
-    ce_w        = float(cp_cfg.get('cross_entropy_weight', 1.0))
+    size_weight = float(cp_cfg.get('size_weight', 0.1))
+    cross_entropy_weight = float(cp_cfg.get('cross_entropy_weight', 1.0))
     target_size = int(cp_cfg.get('target_size', 1))
     
-    # [修正 B] 彻底移除 h_reg_loss，让 h(x) 自由飞翔
     # h_reg_w = 0.0 
 
     warmup_epochs = int(cp_cfg.get('warmup_epochs', 5))
@@ -101,22 +99,18 @@ def train_one_epoch_cat(
         # ---- 1. Calibration Step ----
         cal_p_true = cal_probs[torch.arange(cal_B, device=device), cal_labels]
         
-        # [修正 A] 加上 ReLU!
-        # Score s = max(0, h - p)
-        # 含义：只有当 h 设置得太高(超过真实概率)时，才产生正的非一致性分数
         s_cal = torch.relu(cal_h.squeeze(1) - cal_p_true)
 
         # Calculate Quantile
         q_level = (cal_B + 1) * (1 - alpha) / cal_B
         q_level = min(1.0, max(0.0, q_level))
 
-        qhat_soft = soft_quantile(
+        qhat_soft = scp.soft_quantile(
             s_cal, 
             q=q_level, 
             regularization_strength=reg
         )
         
-        # 保持 Detach，防止梯度对抗
         qhat_soft = qhat_soft.detach()
 
         # ---- 2. Prediction Step ----
@@ -124,8 +118,7 @@ def train_one_epoch_cat(
         tau_pred = pred_h - qhat_soft
         
         # Soft 
-        
-        soft_sets = smooth_predict_threshold(pred_probs, tau_pred, temperature=T)
+        soft_sets = scp.smooth_predict_threshold(pred_probs, tau_pred, temperature=T)
 
         # ---- 3. Losses ----
         coverage_loss = cputils.compute_coverage_loss(soft_sets, pred_labels, loss_matrix)
@@ -143,8 +136,8 @@ def train_one_epoch_cat(
             cp_scale = min(1.0, (epoch - warmup_epochs + 1) / warmup_epochs)
 
         loss = (cp_scale * coverage_loss) + \
-               (cp_scale * size_w_base * size_loss) + \
-               (ce_w * ce_loss)
+               (cp_scale * size_weight * size_loss) + \
+               (cross_entropy_weight * ce_loss)
 
         # Optimization
         optimizer_backbone.zero_grad()
@@ -184,9 +177,8 @@ def run_cat_training(config: Dict[str, Any]):
 
     train_cfg = config['training']
     hnet_cfg  = config['threshold_net']
-    cp_cfg    = config['conformal']
+    # cp_cfg    = config['conformal']
 
-    # 参数调用修正
     data_info = data.get_dataloaders(
         dataset_path=config['dataset_path'],
         batch_size=train_cfg['batch_size'],
@@ -273,4 +265,3 @@ def run_cat_training(config: Dict[str, Any]):
     
     torch.save(model.state_dict(), save_path)
     print(f"Best model saved to {save_path}")
-    

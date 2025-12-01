@@ -1,4 +1,4 @@
-# eval.py (Fixed: Keyword Arguments & Probability Domain)
+# eval.py
 
 import torch
 import torch.nn as nn
@@ -12,6 +12,7 @@ from utils import models
 from utils import data
 from utils import conformal_prediction as cp
 from config import get_config
+from sklearn.metrics import f1_score
 
 def get_predictions(
     model: nn.Module, 
@@ -19,9 +20,7 @@ def get_predictions(
     device: torch.device,
     return_h: bool = False
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    获取模型预测结果 (Probabilities)。
-    """
+
     model.eval()
     all_probs = []
     all_labels = []
@@ -62,7 +61,6 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
     print(f"Using device: {device}")
 
     # --- 2. Load Data (FIXED: Use Keyword Arguments) ---
-    # 必须使用关键字参数，否则 batch_size 会被传给 image_size
     data_info = data.get_dataloaders(
         dataset_path=config['dataset_path'],
         batch_size=config['training']['batch_size'],
@@ -99,7 +97,7 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
     # --- 5. Perform Conformal Prediction ---
     print(f"\nPerforming conformal prediction with alpha = {args.alpha}...")
 
-    if args.cp_method == 'thr':
+    if args.cp == 'thr':
         if is_cat:
             # === CAT Mode (Probability Domain) ===
             # Consistent with fixed cat.py
@@ -109,7 +107,6 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
             test_h_val = test_h.squeeze(1)
             
             # 2. Calibration Score: s = h - p_true
-            # (No ReLU, No Log)
             cal_p_true = cal_probs[torch.arange(len(cal_labels)), cal_labels]
             s_cal = torch.relu(cal_h_val - cal_p_true) 
 
@@ -141,12 +138,12 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
             top1_preds = torch.argmax(test_probs, dim=1)
             prediction_sets[empty_mask, top1_preds[empty_mask]] = True
 
-    elif args.cp_method == 'aps':
+    elif args.cp == 'aps':
         qhat = cp.calibrate_aps(cal_probs, cal_labels, alpha=args.alpha)
         print(f"APS — calibrated qhat: {qhat:.4f}")
         prediction_sets = cp.predict_aps(test_probs, qhat, top1_guarantee=True)
 
-    elif args.cp_method == 'raps':
+    elif args.cp == 'raps':
         k_reg = getattr(args, "k_reg", None)
         lambda_reg = getattr(args, "lambda_reg", None)
         tau = cp.calibrate_raps(cal_probs, cal_labels, alpha=args.alpha, k_reg=k_reg, lambda_reg=lambda_reg)
@@ -154,7 +151,7 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
         prediction_sets = cp.predict_raps(test_probs, tau, k_reg=k_reg, lambda_reg=lambda_reg)
     
     else:
-        raise ValueError(f"Unknown cp-method: {args.cp_method}")
+        raise ValueError(f"Unknown cp-method: {args.cp}")
 
     # --- 6. Metrics ---
     covered = prediction_sets[torch.arange(len(test_labels)), test_labels].float()
@@ -166,11 +163,24 @@ def run_evaluation(config: Dict[str, Any], args: argparse.Namespace):
     print(f"Empirical Coverage: {coverage:.2%}")
     print(f"Average Prediction Set Size: {avg_set_size:.3f}")
 
+
     # --- 7. Classification Metrics ---
     with torch.no_grad():
         preds = torch.argmax(test_probs, dim=1)
+
+        # Accuracy
         correct = (preds == test_labels).sum().item()
-        print(f"Accuracy: {correct / len(test_labels):.4f}")
+        accuracy = correct / len(test_labels)
+        print(f"Accuracy: {accuracy:.4f}")
+
+        # F1 Scores
+        f1_macro = f1_score(test_labels.numpy(), preds.numpy(), average='macro')
+        f1_micro = f1_score(test_labels.numpy(), preds.numpy(), average='micro')
+        f1_weighted = f1_score(test_labels.numpy(), preds.numpy(), average='weighted')
+
+        print(f"F1-macro: {f1_macro:.4f}")
+        print(f"F1-micro: {f1_micro:.4f}")
+        print(f"F1-weighted: {f1_weighted:.4f}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -180,11 +190,12 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='resnet18')
     parser.add_argument('--mode', type=str, default='cat', choices=['conformal', 'cat', 'normal'])
     parser.add_argument('--num_classes', type=int, default=None)
-    parser.add_argument('--cp-method', type=str, default='thr')
+    parser.add_argument('--cp', type=str, default='thr')
 
     args = parser.parse_args()
     
     if args.dataset == 'breakhis':
+        # args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/40X/model_best.pth'
         args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/{args.xs}/model_best.pth'
     else:
         args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/model_best.pth'
