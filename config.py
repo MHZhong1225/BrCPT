@@ -93,6 +93,7 @@ def get_config(
         
         # --- Output Settings ---
         "output_dir": "./experiments/",
+        "vis_dir": "./figs/",
 
         # --- Conformal Training Specific Settings ---
         "conformal": {
@@ -105,7 +106,7 @@ def get_config(
         },
         
         "threshold_net": {
-            "learning_rate": 0.001,
+            "learning_rate": 0.01,
             "weight_decay": 1e-5,
             "hidden_dim": 128     
         }
