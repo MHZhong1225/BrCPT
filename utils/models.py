@@ -1,4 +1,4 @@
-# models.py (Refactored Version - FIXED ThresholdNet)
+# models.py
 
 from typing import Tuple
 import torch
@@ -56,7 +56,7 @@ class ThresholdNet(nn.Module):
 
     def forward(self, features: torch.Tensor) -> torch.Tensor:
         z = self.fc2(self.act(self.fc1(features))).squeeze(1)  # pre-sigmoid
-        z = torch.clamp(z, -self.z_clip, self.z_clip)          # ✅ prevent blow-up
+        z = torch.clamp(z, -self.z_clip, self.z_clip)          # prevent blow-up
         h = torch.sigmoid(z)                                  # in (0,1)
         return h
 
