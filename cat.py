@@ -53,8 +53,12 @@ def train_one_epoch_cat(
     config: Dict[str, Any],
     device: torch.device,
     epoch: int = 0,
+    h_only: bool = False, 
 ) -> float:
     model.train()
+    if h_only:
+        model.backbone.eval()
+        model.classifier.eval()
     running_loss = 0.0
 
     cp_cfg = config['conformal']
@@ -74,6 +78,11 @@ def train_one_epoch_cat(
     warmup_epochs = int(cp_cfg.get('warmup_epochs', 5))
     ce_criterion = nn.CrossEntropyLoss()
     
+    # if h_only:
+    #     warmup_epochs = 0
+    #     cp_scale= 1 
+
+
     progress_bar = tqdm(dataloader, desc="CAT Training")
 
     for inputs, labels in progress_bar:
@@ -130,6 +139,8 @@ def train_one_epoch_cat(
         ce_loss = ce_criterion(all_logits, all_labels)
 
         # Warmup
+
+        # if not h_only:
         if epoch < warmup_epochs:
             cp_scale = 0.0
         else:
@@ -140,22 +151,25 @@ def train_one_epoch_cat(
                (cross_entropy_weight * ce_loss)
 
         # Optimization
-        optimizer_backbone.zero_grad()
+        # optimizer_backbone.zero_grad()
         optimizer_h.zero_grad()
+        if (optimizer_backbone is not None) and (not h_only):
+            optimizer_backbone.zero_grad()
         loss.backward()
 
-        if cp_cfg.get("grad_clip_norm", None):
-            torch.nn.utils.clip_grad_norm_(
-                list(model.backbone.parameters()) + list(model.classifier.parameters()),
-                max_norm=float(cp_cfg["grad_clip_norm"])
-            )
+
+        if (optimizer_backbone is not None) and (not h_only):
+            if cp_cfg.get("grad_clip_norm", None):
+                torch.nn.utils.clip_grad_norm_(
+                    list(model.backbone.parameters()) + list(model.classifier.parameters()),
+                    max_norm=float(cp_cfg["grad_clip_norm"])
+                )
+            optimizer_backbone.step()
         if cp_cfg.get("h_grad_clip_norm", None):
             torch.nn.utils.clip_grad_norm_(
                 model.threshold_net.parameters(),
                 max_norm=float(cp_cfg["h_grad_clip_norm"])
             )
-
-        optimizer_backbone.step()
         optimizer_h.step()
 
         running_loss += loss.item() * inputs.size(0)
@@ -177,8 +191,9 @@ def run_cat_training(config: Dict[str, Any]):
 
     train_cfg = config['training']
     hnet_cfg  = config['threshold_net']
-    # cp_cfg    = config['conformal']
+    cp_cfg    = config['conformal']
 
+    h_only = bool(cp_cfg.get("h_only", False))   # 新增：只学 h(x
     data_info = data.get_dataloaders(
         dataset_path=config['dataset_path'],
         batch_size=train_cfg['batch_size'],
@@ -195,21 +210,68 @@ def run_cat_training(config: Dict[str, Any]):
         pretrained=config['model']['pretrained']
     ).to(device)
 
-    optimizer_backbone = optim.SGD(
-        list(model.backbone.parameters()) + list(model.classifier.parameters()),
-        lr=train_cfg['learning_rate'],
-        momentum=train_cfg['momentum'],
-        weight_decay=train_cfg['weight_decay']
-    )
+    if h_only:
+        init_from = cp_cfg.get("init_backbone_from", None)
+        print(f"Initializing CAT backbone from {init_from}")
+        raw_state = torch.load(init_from, map_location=device, weights_only=True)
+
+        if any(k.startswith("0.") for k in raw_state.keys()):
+            print("[H-only] Detected Sequential-style checkpoint (keys start with '0.' / '2.').")
+            backbone_state = {k.replace("0.", "", 1): v
+                            for k, v in raw_state.items()
+                            if k.startswith("0.")}
+            classifier_state = {k.replace("2.", "", 1): v
+                                for k, v in raw_state.items()
+                                if k.startswith("2.")}
+
+            # 加载到 CAT 的 backbone / classifier 里
+            missing_b, unexpected_b = model.backbone.load_state_dict(backbone_state, strict=False)
+            missing_c, unexpected_c = model.classifier.load_state_dict(classifier_state, strict=False)
+
+            print("[DEBUG] backbone loaded, missing:", missing_b, "unexpected:", unexpected_b)
+            print("[DEBUG] classifier loaded, missing:", missing_c, "unexpected:", unexpected_c)
+
+        else:
+            # 兜底：如果 ckpt 本身就是带 backbone.xxx / classifier.xxx 这种结构
+            print("[H-only] Detected non-Sequential checkpoint, trying direct load to model.")
+            missing, unexpected = model.load_state_dict(raw_state, strict=False)
+            print("[DEBUG] missing keys:", missing)
+            print("[DEBUG] unexpected keys:", unexpected)
+
+
+    if h_only:
+        print(">>> H-only ablation: freezing backbone + classifier, only training threshold_net.")
+        for p in model.backbone.parameters():
+            p.requires_grad = False
+        for p in model.classifier.parameters():
+            p.requires_grad = False
+
+
+    if not h_only:
+        optimizer_backbone = optim.SGD(
+            list(model.backbone.parameters()) + list(model.classifier.parameters()),
+            lr=train_cfg['learning_rate'],
+            momentum=train_cfg['momentum'],
+            weight_decay=train_cfg['weight_decay']
+        )
+    else:
+        optimizer_backbone = None
+
+    # h(x) 的 optimizer 一直都有
     optimizer_h = optim.Adam(
         model.threshold_net.parameters(),
         lr=hnet_cfg['learning_rate'],
         weight_decay=hnet_cfg['weight_decay']
     )
 
-    scheduler_backbone = optim.lr_scheduler.StepLR(
-        optimizer_backbone, step_size=train_cfg.get('lr_step', 30), gamma=0.1
-    )
+    # scheduler
+    if optimizer_backbone is not None:
+        scheduler_backbone = optim.lr_scheduler.StepLR(
+            optimizer_backbone, step_size=train_cfg.get('lr_step', 30), gamma=0.1
+        )
+    else:
+        scheduler_backbone = None
+
     scheduler_h = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer_h, mode='min', factor=0.5, patience=5
     )
@@ -236,7 +298,7 @@ def run_cat_training(config: Dict[str, Any]):
         path=save_path
     )
 
-    print("\n--- Starting CAT Training (ReLU-Residual) ---")
+    print("\n--- Starting CAT Training (Prob-ReLU) ---")
     for epoch in range(train_cfg['epochs']):
         print(f"\nEpoch {epoch+1}/{train_cfg['epochs']}")
 
@@ -244,14 +306,16 @@ def run_cat_training(config: Dict[str, Any]):
             model, dls['train'],
             optimizer_backbone, optimizer_h,
             loss_matrix, config, device,
-            epoch=epoch
+            epoch=epoch,
+            h_only=h_only,      # 关键
         )
         print(f"Train Loss: {train_loss:.4f}")
 
         val_loss, val_acc = evaluate(eval_model, dls['val'], nn.CrossEntropyLoss(), device)
         print(f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
 
-        scheduler_backbone.step()
+        if scheduler_backbone is not None:
+            scheduler_backbone.step()
         scheduler_h.step(val_loss)
 
         early_stopping(val_loss, model)

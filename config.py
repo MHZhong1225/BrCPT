@@ -103,8 +103,12 @@ def get_config(
             "regularization_strength": 0.01, # For torchsort's soft_quantile
             "size_weight": 0.1, # Weight for the size loss term
             "cross_entropy_weight": 0.1, # Optional weight for standard CE loss for stability
+            "h_only": False,
+            "init_backbone_from": "./experiments/breakhis/normal/resnet18/40X/model_best.pth"
+            # "init_backbone_from": "./experiments/bach/normal/resnet18/model_best.pth"
         },
         
+
         "threshold_net": {
             "learning_rate": 0.01,
             "weight_decay": 1e-5,

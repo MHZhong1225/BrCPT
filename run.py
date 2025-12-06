@@ -32,12 +32,14 @@ def main():
                         help="Batch size. Overrides config default.")
     parser.add_argument('--lr', type=float, default=1e-3,
                         help="Learning rate for the backbone. Overrides config default.")
+    parser.add_argument('--lr_h', type=float, default=1e-3)
 
 
     # conformal
     parser.add_argument("--size_weight", type=float, default=0.05)
     parser.add_argument("--regularization_strength", type=float, default=0.01)
     parser.add_argument("--cross_entropy_weight", type=float, default=0.1)
+    parser.add_argument("--h_only", type=bool, default=False)
 
 
     args = parser.parse_args()
@@ -51,6 +53,7 @@ def main():
     if args.epochs: config['training']['epochs'] = args.epochs
     if args.batch_size: config['training']['batch_size'] = args.batch_size
     if args.lr: config['training']['learning_rate'] = args.lr
+    if args.lr_h: config['threshold_net']['learning_rate'] = args.lr_h
 
 
     if args.output_dir: config['output_dir'] = args.output_dir
@@ -73,7 +76,8 @@ def main():
         if args.regularization_strength is not None:
             conf["regularization_strength"] = args.regularization_strength
         if args.alpha is not None:
-            config["alpha"] = args.alpha
+            conf["alpha"] = args.alpha
+        conf["h_only"] = args.h_only
     else:
         config.pop("conformal", None)
 

@@ -191,15 +191,18 @@ if __name__ == '__main__':
     parser.add_argument('--mode', type=str, default='cat', choices=['conformal', 'cat', 'normal'])
     parser.add_argument('--num_classes', type=int, default=None)
     parser.add_argument('--cp', type=str, default='thr')
+    parser.add_argument('--cross', type=bool, default=False)
 
     args = parser.parse_args()
     
     if args.dataset == 'breakhis':
-        # args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/40X/model_best.pth'
         args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/{args.xs}/model_best.pth'
+        if args.cross:
+            print("cross")
+            args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/200X/model_best.pth'
     else:
         args.model_path = f'./experiments/{args.dataset}/{args.mode}/{args.model}/model_best.pth'
-        
+    
     config = get_config(dataset=args.dataset)
     if args.num_classes: config['num_classes'] = args.num_classes
     if args.dataset == 'breakhis' and args.xs != 'all':
