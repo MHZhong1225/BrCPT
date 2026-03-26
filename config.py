@@ -32,10 +32,7 @@ def apply_dataset_preset(
     std:  tuple[float,float,float] | None = None,
     num_classes: int | None = None
 ) -> dict:
-    """
-    按数据集名覆盖 config 里的 num_classes/mean/std；手动传入的 mean/std/num_classes 优先级最高。
-    """
-    cfg = dict(config)  # 浅拷贝
+    cfg = dict(config) 
     if dataset:
         preset = DATASET_PRESETS.get(dataset.lower())
         if preset:
@@ -67,6 +64,7 @@ def get_config(
         # --- General Settings ---
         "seed": 42,
         "device": "cuda", # "cuda" or "cpu"
+        "save_loss": False,
 
         # --- Data Settings ---
         "dataset": "breakhis",

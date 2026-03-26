@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import os
 from typing import Dict, Any, Tuple
-from utils import train_utils as cputils
+from utils import utils as cputils
 
 # Import from our refactored files
 from utils import models

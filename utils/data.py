@@ -58,7 +58,6 @@ def get_dataloaders_imagefolder(
 # BreakHis 
 # -------------------------------
 
-# 亚型映射（8类）
 SUBTYPE_CODES = {
     # 良性
     "A": "Adenosis",
@@ -108,12 +107,11 @@ def _parse_subtype_code(path: str) -> Optional[str]:
     return None
 
 def _get_patient_id(path: str) -> Optional[str]:
-    # 例:SOB_B_A-14-22549-40X-001.png -> patient id ~ "14-22549"
+    # eg.:SOB_B_A-14-22549-40X-001.png -> patient id ~ "14-22549"
     fname = os.path.basename(path)
     m = re.search(r"_(?:B|M)_(?:A|F|PT|TA|DC|LC|MC|PC)-(.*?)-\d+", fname, re.IGNORECASE)
     if m:
         return m.group(1)
-    # fallback: 上一级目录
     return os.path.basename(os.path.dirname(path)) or None
 
 class BreakHisDataset(Dataset):
@@ -260,7 +258,6 @@ def get_dataloaders(
     batch_size: int = 32,
     mean: Tuple[float, float, float] = (0.78, 0.62, 0.76),
     std: Tuple[float, float, float] = (0.15, 0.19, 0.14),
-    # 下面是 BreakHis 专用可选项（有 train/val/test 时会被忽略）
     task: str = "multiclass",
     magnifications: Optional[List[str]] = None,
     num_workers: int = 6,
