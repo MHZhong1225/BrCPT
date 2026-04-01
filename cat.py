@@ -2,7 +2,6 @@
 import os
 
 from utils.utils import final_evaluation
-os.environ['WANDB_API_KEY'] = '799d88a5c663e0223666306b120fa6de05e0acdd'
 import torch
 import torch.nn as nn
 import torch.optim as optim
