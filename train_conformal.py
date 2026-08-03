@@ -26,7 +26,7 @@ import numpy as np
 from utils import models
 from utils import data
 from utils import smooth_conformal_prediction as scp
-from utils import train_utils as cputils
+from utils import utils as cputils
 from train_normal import evaluate # We can reuse the standard evaluation function
 
 def train_one_epoch_conformal(
